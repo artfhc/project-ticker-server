@@ -1,6 +1,20 @@
-# Serverless + FastAPI (Mangum) + Docker + Terraform
+# Ticker API
+The API returns the historical data of the ticker.
 
-## How to try this? 🤔
+## How to set up local environment
+
+### One time set up
+> python3 -m venv .venv
+> echo "*" > .venv/.gitignore
+> source .venv/bin/activate
+> pip install -r ./app/requirements.txt
+> pip install "fastapi[standard]"
+> deactivate
+
+### How to run the application locally
+> fastapi dev app/main.py
+
+## How to deploy this in production? 🤔
 
 ### Requirement
 
