@@ -30,3 +30,9 @@ deploy:
 		@echo "** Deploying API Gateway and Lambda"
 		cd terraform && \
 		terraform apply -auto-approve
+
+update:
+		@echo "** Update Lambda to latest image"
+		aws lambda update-function-code \
+           --function-name serverless_fastapi_function \
+           --image-uri $(IMAGE_URI)/$(IMAGE_NAME):$(IMAGE_TAG)

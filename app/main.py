@@ -21,14 +21,19 @@ ticker_dict = {
 def read_root():
     return {"Hello": "World testing again"}
 
-@app.get("/price/{ticker}")
-def read_root(ticker: str):
+@app.get("/ticket/price/{ticker}")
+def read_ticket_price(ticker: str):
     ticker_info = yf.Ticker(ticker_dict[ticker] if ticker in ticker_dict else ticker)
     return {
         "symbol": ticker_info.info['symbol'],
         "price": ticker_info.info['previousClose'],
         "volume": ticker_info.info['volume']
     }
+
+@app.get("/ticket/{ticker}")
+def read_ticket(ticker: str):
+    ticker_info = yf.Ticker(ticker_dict[ticker] if ticker in ticker_dict else ticker)
+    return ticker_info.info
 
 app.include_router(api_router, prefix="/api/v1")
 
