@@ -16,10 +16,7 @@ from app.api.v1.api import router as api_router
 load_dotenv()
 
 # API Keys - Load from environment variables
-FINNHUB_API_KEY = os.getenv("FINNHUB_API_KEY", "")
-ALPHA_VANTAGE_API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY", "")
 POLYGON_API_KEY = os.getenv("POLYGON_API_KEY", "")
-TWELVE_DATA_API_KEY = os.getenv("TWELVE_DATA_API_KEY", "")
 
 print(f"Loaded API keys: Polygon={'Yes' if POLYGON_API_KEY else 'No'}")
 print(f"DEBUG: Polygon API key = '{POLYGON_API_KEY}' (length: {len(POLYGON_API_KEY)})")
@@ -74,103 +71,8 @@ def get_ticker_info_safe(ticker_symbol: str):
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"Unable to fetch ticker data: {str(e)}")
 
-async def get_mock_data(symbol: str) -> Dict[str, Any]:
-    """Return mock data for demo purposes when APIs are down"""
-    import random
-    base_price = 100.0
-    if symbol.upper() == 'MSFT':
-        base_price = 380.0
-    elif symbol.upper() == 'AAPL':
-        base_price = 190.0
-    elif symbol.upper() == 'GOOGL':
-        base_price = 140.0
-    elif symbol.upper() in ['GC=F', 'GOLD']:
-        base_price = 2000.0
-    
-    # Generate realistic price movements
-    change = random.uniform(-5, 5)
-    current_price = base_price + change
-    
-    return {
-        "symbol": symbol,
-        "price": round(current_price, 2),
-        "open": round(current_price - random.uniform(-2, 2), 2),
-        "high": round(current_price + random.uniform(0, 3), 2),
-        "low": round(current_price - random.uniform(0, 3), 2),
-        "volume": random.randint(1000000, 50000000),
-        "source": "mock_data"
-    }
 
-async def get_finnhub_real_data(symbol: str) -> Optional[Dict[str, Any]]:
-    """Get real data from Finnhub with API key"""
-    if not FINNHUB_API_KEY:
-        return None
-        
-    try:
-        async with httpx.AsyncClient() as client:
-            url = f"https://finnhub.io/api/v1/quote"
-            params = {
-                'symbol': symbol,
-                'token': FINNHUB_API_KEY
-            }
-            
-            response = await client.get(url, params=params, timeout=10.0)
-            
-            if response.status_code == 200:
-                data = response.json()
-                
-                if data.get('c'):  # current price exists
-                    return {
-                        "symbol": symbol,
-                        "price": float(data['c']),   # current price
-                        "open": float(data['o']),    # open price
-                        "high": float(data['h']),    # high price
-                        "low": float(data['l']),     # low price
-                        "volume": 0,  # Volume not in quote endpoint
-                        "source": "finnhub_real",
-                        "timestamp": data.get('t', 0)
-                    }
-                    
-    except Exception as e:
-        print(f"Finnhub real API failed for {symbol}: {e}")
-    
-    return None
 
-async def get_alpha_vantage_real_data(symbol: str) -> Optional[Dict[str, Any]]:
-    """Get real data from Alpha Vantage with API key"""
-    if not ALPHA_VANTAGE_API_KEY:
-        return None
-        
-    try:
-        async with httpx.AsyncClient() as client:
-            url = "https://www.alphavantage.co/query"
-            params = {
-                'function': 'GLOBAL_QUOTE',
-                'symbol': symbol,
-                'apikey': ALPHA_VANTAGE_API_KEY
-            }
-            
-            response = await client.get(url, params=params, timeout=10.0)
-            
-            if response.status_code == 200:
-                data = response.json()
-                quote = data.get('Global Quote', {})
-                
-                if quote and quote.get('05. price'):
-                    return {
-                        "symbol": symbol,
-                        "price": float(quote['05. price']),
-                        "open": float(quote['02. open']),
-                        "high": float(quote['03. high']),
-                        "low": float(quote['04. low']),
-                        "volume": int(quote['06. volume']),
-                        "source": "alpha_vantage_real"
-                    }
-                    
-    except Exception as e:
-        print(f"Alpha Vantage real API failed for {symbol}: {e}")
-    
-    return None
 
 async def get_polygon_real_data(symbol: str) -> Optional[Dict[str, Any]]:
     """Get real data from Polygon.io with API key"""
@@ -210,102 +112,8 @@ async def get_polygon_real_data(symbol: str) -> Optional[Dict[str, Any]]:
     
     return None
 
-async def get_twelve_data_real_data(symbol: str) -> Optional[Dict[str, Any]]:
-    """Get real data from Twelve Data with API key"""
-    if not TWELVE_DATA_API_KEY:
-        return None
-        
-    try:
-        async with httpx.AsyncClient() as client:
-            url = "https://api.twelvedata.com/quote"
-            params = {
-                'symbol': symbol,
-                'apikey': TWELVE_DATA_API_KEY
-            }
-            
-            response = await client.get(url, params=params, timeout=10.0)
-            
-            if response.status_code == 200:
-                data = response.json()
-                
-                if data.get('close'):
-                    return {
-                        "symbol": symbol,
-                        "price": float(data['close']),
-                        "open": float(data['open']),
-                        "high": float(data['high']),
-                        "low": float(data['low']),
-                        "volume": int(data.get('volume', 0)),
-                        "source": "twelve_data_real"
-                    }
-                    
-    except Exception as e:
-        print(f"Twelve Data real API failed for {symbol}: {e}")
-    
-    return None
 
-async def get_marketstack_data(symbol: str) -> Optional[Dict[str, Any]]:
-    """Get real data from Marketstack free API (1000 calls/month)"""
-    try:
-        async with httpx.AsyncClient() as client:
-            # Marketstack free tier
-            url = f"http://api.marketstack.com/v1/eod/latest"
-            
-            params = {
-                'access_key': 'demo',  # Try demo access
-                'symbols': symbol
-            }
-            
-            response = await client.get(url, params=params, timeout=10.0)
-            
-            if response.status_code == 200:
-                data = response.json()
-                
-                if data.get('data') and len(data['data']) > 0:
-                    quote = data['data'][0]
-                    
-                    return {
-                        "symbol": symbol,
-                        "price": float(quote['close']),
-                        "open": float(quote['open']),
-                        "high": float(quote['high']),
-                        "low": float(quote['low']),
-                        "volume": int(quote.get('volume', 0)),
-                        "source": "marketstack"
-                    }
-                        
-    except Exception as e:
-        print(f"Marketstack failed for {symbol}: {e}")
-    
-    return None
 
-async def get_iex_cloud_data(symbol: str) -> Optional[Dict[str, Any]]:
-    """Get data from IEX Cloud sandbox (free)"""
-    try:
-        # IEX Cloud sandbox - free tier with demo data
-        async with httpx.AsyncClient() as client:
-            # Use sandbox environment - no API key needed for testing
-            url = f"https://sandbox.iexapis.com/stable/stock/{symbol}/quote"
-            response = await client.get(url, timeout=10.0)
-            
-            if response.status_code == 200:
-                data = response.json()
-                price = data.get('latestPrice')
-                if price:
-                    return {
-                        "symbol": symbol,
-                        "price": float(price),
-                        "open": float(data.get('open', price)),
-                        "high": float(data.get('high', price)),
-                        "low": float(data.get('low', price)),
-                        "volume": int(data.get('volume', 0)),
-                        "source": "iex_cloud_sandbox",
-                        "market_cap": data.get('marketCap'),
-                        "pe_ratio": data.get('peRatio')
-                    }
-    except Exception as e:
-        print(f"IEX Cloud failed: {e}")
-    return None
 
 async def get_coinbase_gold_price() -> Optional[Dict[str, Any]]:
     """Get real gold price from Coinbase API"""
@@ -337,10 +145,6 @@ async def get_coinbase_gold_price() -> Optional[Dict[str, Any]]:
         print(f"Coinbase gold API failed: {e}")
     return None
 
-async def get_alpha_vantage_data(symbol: str) -> Optional[Dict[str, Any]]:
-    """Disabled - demo API returns fake data"""
-    print(f"Alpha Vantage skipped for {symbol} - demo API returns fake data")
-    return None
 
 def get_price(symbol):
     """Simple yfinance price getter"""
@@ -387,39 +191,6 @@ def get_ticker_price_data(ticker_symbol: str):
     except Exception as e:
         print(f"Polygon.io failed for {ticker_symbol}: {e}")
     
-    # Try Finnhub (if API key available)
-    try:
-        print(f"Attempting Finnhub for {ticker_symbol}")
-        finnhub_data = asyncio.run(get_finnhub_real_data(ticker_symbol))
-        if finnhub_data:
-            print(f"Finnhub success for {ticker_symbol}: ${finnhub_data['price']}")
-            set_cache(cache_key, finnhub_data)
-            return finnhub_data
-    except Exception as e:
-        print(f"Finnhub failed for {ticker_symbol}: {e}")
-    
-    # Try Alpha Vantage (if API key available)
-    try:
-        print(f"Attempting Alpha Vantage for {ticker_symbol}")
-        av_data = asyncio.run(get_alpha_vantage_real_data(ticker_symbol))
-        if av_data:
-            print(f"Alpha Vantage success for {ticker_symbol}: ${av_data['price']}")
-            set_cache(cache_key, av_data)
-            return av_data
-    except Exception as e:
-        print(f"Alpha Vantage failed for {ticker_symbol}: {e}")
-    
-    # Try Twelve Data (if API key available)
-    try:
-        print(f"Attempting Twelve Data for {ticker_symbol}")
-        twelve_data = asyncio.run(get_twelve_data_real_data(ticker_symbol))
-        if twelve_data:
-            print(f"Twelve Data success for {ticker_symbol}: ${twelve_data['price']}")
-            set_cache(cache_key, twelve_data)
-            return twelve_data
-    except Exception as e:
-        print(f"Twelve Data failed for {ticker_symbol}: {e}")
-    
     # Secondary: Try simple yfinance approach  
     try:
         print(f"Attempting yfinance fallback for {ticker_symbol}")
@@ -440,83 +211,13 @@ def get_ticker_price_data(ticker_symbol: str):
     except Exception as e:
         print(f"yfinance fallback failed for {ticker_symbol}: {e}")
     
-    # Final fallback: mock data
-    print(f"WARNING: All real sources failed for {ticker_symbol}, using mock data")
-    try:
-        mock_data = asyncio.run(get_mock_data(ticker_symbol))
-        # Cache mock data for shorter time (60 seconds)
-        cache[cache_key] = {
-            'data': mock_data,
-            'timestamp': datetime.utcnow()
-        }
-        return mock_data
-    except Exception as e:
-        raise HTTPException(
-            status_code=503, 
-            detail=f"All data sources unavailable: {str(e)}"
-        )
+    # No data available - return error
+    print(f"ERROR: All data sources failed for {ticker_symbol}")
+    raise HTTPException(
+        status_code=500, 
+        detail=f"Unable to fetch data for symbol '{ticker_symbol}': All data sources unavailable"
+    )
 
-async def get_mock_full_info(symbol: str) -> Dict[str, Any]:
-    """Return mock full company info for demo purposes"""
-    import random
-    
-    # Get price data first
-    price_data = await get_mock_data(symbol)
-    
-    # Mock company info based on symbol
-    company_info = {
-        'MSFT': {
-            'longName': 'Microsoft Corporation',
-            'industry': 'Software - Infrastructure',
-            'sector': 'Technology',
-            'marketCap': 2800000000000,
-            'employees': 221000,
-            'city': 'Redmond',
-            'state': 'WA',
-            'country': 'United States',
-            'website': 'https://www.microsoft.com'
-        },
-        'AAPL': {
-            'longName': 'Apple Inc.',
-            'industry': 'Consumer Electronics',
-            'sector': 'Technology',
-            'marketCap': 3000000000000,
-            'employees': 164000,
-            'city': 'Cupertino',
-            'state': 'CA',
-            'country': 'United States',
-            'website': 'https://www.apple.com'
-        },
-        'GC=F': {
-            'longName': 'Gold Futures',
-            'industry': 'Commodities',
-            'sector': 'Financial Services',
-            'marketCap': None,
-            'employees': None,
-            'city': 'New York',
-            'state': 'NY',
-            'country': 'United States',
-            'website': 'https://www.cmegroup.com'
-        }
-    }.get(symbol.upper(), {
-        'longName': f'{symbol.upper()} Corp',
-        'industry': 'General',
-        'sector': 'Unknown',
-        'marketCap': random.randint(1000000000, 100000000000),
-        'employees': random.randint(1000, 50000),
-        'city': 'Unknown',
-        'state': 'Unknown',
-        'country': 'United States',
-        'website': f'https://www.{symbol.lower()}.com'
-    })
-    
-    # Combine price and company data
-    return {
-        **price_data,
-        **company_info,
-        'symbol': symbol,
-        'source': 'mock_full_data'
-    }
 
 def get_ticker_full_info(ticker_symbol: str):
     """Get full ticker info with special handling for gold and Polygon.io first, then fallbacks"""
@@ -557,18 +258,7 @@ def get_ticker_full_info(ticker_symbol: str):
         except Exception as e:
             print(f"Polygon.io failed for full info on {ticker_symbol}: {e}")
     
-    # Try other real APIs if Polygon failed
-    if not price_data:
-        try:
-            print(f"Attempting Finnhub for full info on {ticker_symbol}")
-            finnhub_data = asyncio.run(get_finnhub_real_data(ticker_symbol))
-            if finnhub_data:
-                price_data = finnhub_data
-                print(f"Finnhub success for full info on {ticker_symbol}: ${price_data['price']}")
-        except Exception as e:
-            print(f"Finnhub failed for full info on {ticker_symbol}: {e}")
-    
-    # If we got real price data, combine with mock company info
+    # If we got real price data, combine with company info
     if price_data:
         try:
             # For gold, use special company info
@@ -594,34 +284,39 @@ def get_ticker_full_info(ticker_symbol: str):
                     'source': f"{price_data['source']}_with_gold_info"
                 }
             else:
-                # Get company info from mock data for stocks
-                mock_company = asyncio.run(get_mock_full_info(ticker_symbol))
+                # For stocks, use basic company info structure
+                stock_company_info = {
+                    'longName': f'{ticker_symbol.upper()} Stock',
+                    'industry': 'Unknown',
+                    'sector': 'Unknown',
+                    'marketCap': None,
+                    'employees': None,
+                    'city': 'Unknown',
+                    'state': 'Unknown',
+                    'country': 'Unknown',
+                    'website': None
+                }
                 
-                # Combine real price data with mock company info
+                # Combine real price data with basic company info
                 combined_data = {
-                    **mock_company,  # Company info (name, industry, etc.)
+                    **stock_company_info,
                     **price_data,    # Real price data
                     'currentPrice': price_data['price'],
-                    'source': f"{price_data['source']}_with_mock_company"
+                    'source': f"{price_data['source']}_with_basic_info"
                 }
             
             set_cache(cache_key, combined_data)
             return combined_data
             
         except Exception as e:
-            print(f"Failed to combine real and mock data: {e}")
+            print(f"Failed to combine real and company data: {e}")
     
-    # Fallback to pure mock data
-    print(f"WARNING: All real sources failed for full info on {ticker_symbol}, using pure mock data")
-    try:
-        mock_data = asyncio.run(get_mock_full_info(ticker_symbol))
-        set_cache(cache_key, mock_data)
-        return mock_data
-    except Exception as e:
-        raise HTTPException(
-            status_code=503, 
-            detail=f"All data sources unavailable: {str(e)}"
-        )
+    # No data available - return error
+    print(f"ERROR: All data sources failed for full info on {ticker_symbol}")
+    raise HTTPException(
+        status_code=500, 
+        detail=f"Unable to fetch full information for symbol '{ticker_symbol}': All data sources unavailable"
+    )
 
 @app.get("/")
 def read_root():
@@ -640,10 +335,9 @@ def read_ticket_price(ticker: str):
     ticker_symbol = ticker_dict.get(ticker, ticker)
     data = get_ticker_price_data(ticker_symbol)
     
-    # Add debug info in development
+    # Log the data source for debugging
     source = data.get("source", "unknown")
-    if source.startswith("mock"):
-        print(f"WARNING: Using mock data for {ticker_symbol}, source: {source}")
+    print(f"Returning real data for {ticker_symbol}, source: {source}")
     
     return str(data["price"])
 
